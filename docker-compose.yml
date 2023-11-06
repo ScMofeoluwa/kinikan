@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  web:
+    image: python:3.8
+    command: python app.py
+    ports:
+      - "5000:5000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+  redis:
+    image: redis:alpine
