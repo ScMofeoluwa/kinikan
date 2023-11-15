@@ -1,8 +1,7 @@
 package platform
 
 type DeploymentPlatform interface {
-	ValidateCLI() error
-	CreateApp() error
+	CreateApp() (string, error)
 	CreateAddOns(serviceImages []string) error
-	DeployApp(serviceImages []string) error
+	Deploy() error
 }
