@@ -2,8 +2,17 @@ package heroku
 
 import (
 	"fmt"
+	"kinikan/platform"
+	"net/http"
 	"os/exec"
 	"strings"
+
+	"github.com/go-resty/resty/v2"
+)
+
+const (
+	appUrl   = "https://api.heroku.com/apps"
+	addOnUrl = "https://api.heroku.com/apps/%s/addons"
 )
 
 var addOns = map[string]string{
@@ -12,39 +21,59 @@ var addOns = map[string]string{
 	"redis":    "rediscloud:30",
 }
 
-type Heroku struct{}
-
-func New() *Heroku {
-	return &Heroku{}
+type CreateAppResponse struct {
+	Name   string `json:"name"`
+	GitURL string `json:"git_url"`
 }
 
-func (h *Heroku) ValidateCLI() error {
-	_, err := exec.LookPath("heroku")
-	if err != nil {
-		return fmt.Errorf("Heroku CLI is not installed")
-	}
+type Heroku struct {
+	req *resty.Request
+}
 
-	cmd := exec.Command("heroku", "whoami")
-	_, err = cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("not logged in to Heroku. Please log in using 'heroku login'. Error: %s", err)
-	}
+var _ platform.DeploymentPlatform = &Heroku{}
 
-	return nil
+func New(apiKey string) *Heroku {
+	client := resty.New().
+		SetRetryCount(3).
+		AddRetryCondition(
+			func(r *resty.Response, err error) bool {
+				return r.StatusCode() == http.StatusInternalServerError
+			},
+		)
+
+	req := client.R().
+		SetHeaders(
+			map[string]string{
+				"Content-Type": "application/json",
+				"Accept":       "application/vnd.heroku+json; version=3",
+			},
+		).SetAuthToken(apiKey)
+
+	return &Heroku{
+		req: req,
+	}
 }
 
 func (h *Heroku) CreateApp() (string, error) {
-	cmd := exec.Command("heroku", "apps:create")
-	out, err := cmd.CombinedOutput()
+	var resp CreateAppResponse
+	_, err := h.req.SetResult(&resp).Post(appUrl)
 	if err != nil {
-		return "", fmt.Errorf("error creating Heroku app: %v - Output: %s", err, string(out))
+		return "", fmt.Errorf("error creating Heroku app: %v", err)
 	}
 
-	appName := strings.Split(strings.Split(string(out), "//")[1], ".")[0]
-	parts := strings.Split(appName, "-")
-	appName = strings.Join(parts[:len(parts)-1], "-")
-	fmt.Printf("Successfully created heroku app: %s\n", appName)
-	return appName, nil
+	out, err := exec.Command("git", "remote", "-v").Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(string(out), "heroku") {
+		exec.Command("git", "remote", "set-url", "heroku", resp.GitURL).Run()
+	} else {
+		exec.Command("git", "remote", "add", "heroku", resp.GitURL).Run()
+	}
+
+	fmt.Printf("Successfully created Railway project: %s\n", resp.Name)
+	return resp.Name, nil
 }
 
 func (h *Heroku) CreateAddOns(serviceImages []string) error {
@@ -52,14 +81,6 @@ func (h *Heroku) CreateAddOns(serviceImages []string) error {
 	if err != nil {
 		return err
 	}
-
-	cmd := exec.Command("heroku", "git:remote", "-a", appName)
-	var out []byte
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error linking app to heroku: %v - Output: %s", err, string(out))
-	}
-	fmt.Printf("Successfully linked app: %s to Heroku \n", appName)
 
 	for _, serviceImage := range serviceImages {
 		baseImg := strings.Split(serviceImage, ":")[0]
@@ -69,14 +90,21 @@ func (h *Heroku) CreateAddOns(serviceImages []string) error {
 			continue
 		}
 
-		cmd := exec.Command("heroku", "addons:create", addOn)
-		out, err := cmd.CombinedOutput()
+		payload := map[string]string{
+			"plan": addOn,
+		}
+
+		_, err := h.req.SetBody(payload).Post(fmt.Sprintf(addOnUrl, appName))
 		if err != nil {
-			return fmt.Errorf("error creating Heroku add-on for %s: %v - Output: %s", serviceImage, err, string(out))
+			return fmt.Errorf("error attaching add-on to app: %v", err)
 		}
 
 		fmt.Printf("Successfully created Heroku add-on %s\n", addOn)
 	}
 
+	return nil
+}
+
+func (h *Heroku) Deploy() error {
 	return nil
 }
