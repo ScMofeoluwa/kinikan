@@ -78,7 +78,7 @@ func (r *Railway) CreateApp() (string, error) {
 	}
 
 	projectID := resp.Data.ProjectCreate.ID
-	fmt.Printf("Successfully created Railway project: %s\n", appName)
+	fmt.Printf("\nSuccessfully created Railway project: %s\n", appName)
 	return projectID, nil
 }
 
@@ -100,7 +100,6 @@ func (r *Railway) CreateAddOns(serviceImages []string) error {
 		baseImg := strings.Split(serviceImage, ":")[0]
 		addOn, exists := addOns[baseImg]
 		if !exists {
-			fmt.Printf("No Railway add-on for the Docker image: %s\n", serviceImage)
 			continue
 		}
 
@@ -118,8 +117,6 @@ func (r *Railway) CreateAddOns(serviceImages []string) error {
 		if err != nil {
 			return fmt.Errorf("error attaching plugin to project: %v", err)
 		}
-
-		fmt.Printf("Successfully created Railway plugin %s\n", addOn)
 	}
 
 	return nil

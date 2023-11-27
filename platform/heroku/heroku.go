@@ -72,7 +72,7 @@ func (h *Heroku) CreateApp() (string, error) {
 		exec.Command("git", "remote", "add", "heroku", resp.GitURL).Run()
 	}
 
-	fmt.Printf("Successfully created Railway project: %s\n", resp.Name)
+	fmt.Printf("\nSuccessfully created Heroku project: %s\n", resp.Name)
 	return resp.Name, nil
 }
 
@@ -86,7 +86,6 @@ func (h *Heroku) CreateAddOns(serviceImages []string) error {
 		baseImg := strings.Split(serviceImage, ":")[0]
 		addOn, exists := addOns[baseImg]
 		if !exists {
-			fmt.Printf("No Heroku add-on for the Docker image: %s\n", serviceImage)
 			continue
 		}
 
@@ -98,8 +97,6 @@ func (h *Heroku) CreateAddOns(serviceImages []string) error {
 		if err != nil {
 			return fmt.Errorf("error attaching add-on to app: %v", err)
 		}
-
-		fmt.Printf("Successfully created Heroku add-on %s\n", addOn)
 	}
 
 	return nil
