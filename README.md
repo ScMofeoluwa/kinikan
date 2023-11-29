@@ -33,7 +33,7 @@ These can be set in your shell as follows:
 # For Heroku
 export HEROKU_API_KEY='your_heroku_api_key'
 
-# For Fly
+# For Railway
 export RAILWAY_API_KEY='your_railway_token'
 ```
 
